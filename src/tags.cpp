@@ -130,6 +130,12 @@ struct Tags::Impl {
         option->features = QStyleOptionFrame::None;
     }
 
+    inline QRectF crossRect(QRectF const& r) const {
+        QRectF cross(QPointF{0, 0}, QSizeF{tag_cross_width, tag_cross_width});
+        cross.moveCenter(QPointF(r.right() - tag_cross_width, r.center().y()));
+        return cross;
+    }
+
     template <class It>
     void drawTags(QPainter& p, std::pair<It, It> range) const {
         for (auto it = range.first; it != range.second; ++it) {
@@ -149,8 +155,7 @@ struct Tags::Impl {
             p.drawText(text_pos, it->text);
 
             // calc cross rect
-            QRectF i_cross_r(QPointF{0, 0}, QSizeF{tag_cross_width, tag_cross_width});
-            i_cross_r.moveCenter(QPointF(i_r.right() - tag_cross_width, i_r.center().y()));
+            auto const i_cross_r = crossRect(i_r);
 
             QPen pen = p.pen();
             pen.setWidth(2);
@@ -417,6 +422,7 @@ Tags::Tags(QWidget* parent)
     setFocusPolicy(Qt::StrongFocus);
     setCursor(Qt::IBeamCursor);
     setAttribute(Qt::WA_InputMethodEnabled, true);
+    setMouseTracking(true);
 
     impl->setupCompleter();
     impl->setCursorVisible(hasFocus());
@@ -680,4 +686,15 @@ std::vector<QString> Tags::tags() const {
                        return tag.text;
                    });
     return ret;
+}
+
+void Tags::mouseMoveEvent(QMouseEvent* event) {
+    for (size_t i = 0; i < impl->tags.size(); ++i) {
+        if (impl->crossRect(impl->tags[i].rect).translated(-impl->hscroll, 0).contains(event->pos()) &&
+            (!impl->cursorVisible() || i != impl->editing_index)) {
+            setCursor(Qt::ArrowCursor);
+            return;
+        }
+    }
+    setCursor(Qt::IBeamCursor);
 }

@@ -136,6 +136,11 @@ struct Tags::Impl {
         return cross;
     }
 
+    bool inCrossArea(size_t tag_index, QPoint const& point) const {
+        return crossRect(tags[tag_index].rect).adjusted(-2, 0, 0, 0).translated(-hscroll, 0).contains(point) &&
+               (!cursorVisible() || tag_index != editing_index);
+    }
+
     template <class It>
     void drawTags(QPainter& p, std::pair<It, It> range) const {
         for (auto it = range.first; it != range.second; ++it) {
@@ -279,7 +284,7 @@ struct Tags::Impl {
         return tags[editing_index].rect;
     }
 
-    void appendTag() {
+    void editNewTag() {
         tags.push_back(Tag());
         setEditingIndex(tags.size() - 1);
         moveCursor(0, false);
@@ -504,6 +509,15 @@ void Tags::timerEvent(QTimerEvent* event) {
 void Tags::mousePressEvent(QMouseEvent* event) {
     bool found = false;
     for (size_t i = 0; i < impl->tags.size(); ++i) {
+        if (impl->inCrossArea(i, event->pos())) {
+            impl->tags.erase(impl->tags.begin() + std::ptrdiff_t(i));
+            if (i <= impl->editing_index) {
+                --impl->editing_index;
+            }
+            found = true;
+            break;
+        }
+
         if (!impl->tags[i].rect.translated(-impl->hscroll, 0).contains(event->pos())) {
             continue;
         }
@@ -513,18 +527,15 @@ void Tags::mousePressEvent(QMouseEvent* event) {
                                  (event->pos() - impl->currentRect().translated(-impl->hscroll, 0).topLeft()).x()),
                              false);
         } else {
-            impl->setEditingIndex(i);
-            impl->moveCursor(impl->currentText().size(), false);
+            impl->editTag(i);
         }
 
         found = true;
-        event->accept();
-
         break;
     }
 
     if (!found) {
-        impl->appendTag();
+        impl->editNewTag();
         event->accept();
     }
 
@@ -670,7 +681,7 @@ void Tags::tags(std::vector<QString> const& tags) {
     impl->editing_index = 0;
     impl->moveCursor(0, false);
 
-    impl->appendTag();
+    impl->editNewTag();
     impl->updateDisplayText();
     impl->calcRects();
 
@@ -690,8 +701,7 @@ std::vector<QString> Tags::tags() const {
 
 void Tags::mouseMoveEvent(QMouseEvent* event) {
     for (size_t i = 0; i < impl->tags.size(); ++i) {
-        if (impl->crossRect(impl->tags[i].rect).translated(-impl->hscroll, 0).contains(event->pos()) &&
-            (!impl->cursorVisible() || i != impl->editing_index)) {
+        if (impl->inCrossArea(i, event->pos())) {
             setCursor(Qt::ArrowCursor);
             return;
         }
